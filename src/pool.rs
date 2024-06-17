@@ -10,6 +10,7 @@ use tokio::task::JoinHandle;
 use rayon::prelude::*;
 use reqwest::ClientBuilder;
 use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::time::{Instant, sleep_until};
 use crate::db::{DBConnection, WebhookDB, WebhookDBItem};
 
 pub struct Pool {
@@ -71,6 +72,7 @@ impl Pool {
                 futures_util::future::join_all(db_entries).await;
 
                 pool = pool.into_par_iter().filter(|item| !item.delay_sent).collect();
+                sleep_until(Instant::now() + Duration::from_secs(2)).await
             }
         })
     }
