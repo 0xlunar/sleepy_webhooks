@@ -4,7 +4,7 @@ use std::time::Duration;
 use actix_web::web::{Bytes, BytesMut};
 use anyhow::format_err;
 use chrono::Local;
-use log::error;
+use log::{error, info};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use rayon::prelude::*;
@@ -78,7 +78,7 @@ impl Pool {
     }
 
     async fn process_pool_item(item: &mut PoolItem, db: Arc<WebhookDB>) -> anyhow::Result<()> {
-        let client = ClientBuilder::new().build()?;
+        let client = ClientBuilder::new().use_rustls_tls().build()?;
 
         let db_item = db.get(&item.id).await?;
 

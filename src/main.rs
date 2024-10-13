@@ -12,7 +12,6 @@ use crate::routes::{get_webhook_details, send_delayed_webhook, update_delayed_we
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
     let args = Arguments::parse();
