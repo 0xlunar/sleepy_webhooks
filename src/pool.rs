@@ -1,22 +1,22 @@
-use std::collections::VecDeque;
-use std::sync::Arc;
-use std::time::Duration;
+use crate::db::{DBConnection, WebhookDB, WebhookDBItem};
 use actix_web::web::{Bytes, BytesMut};
 use anyhow::format_err;
 use chrono::Local;
 use log::{error, info};
-use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
 use rayon::prelude::*;
 use reqwest::ClientBuilder;
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
-use tokio::time::{Instant, sleep_until};
-use crate::db::{DBConnection, WebhookDB, WebhookDBItem};
+use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
+use tokio::time::{sleep_until, Instant};
 
 pub struct Pool {
     pool: VecDeque<PoolItem>,
     receiver: UnboundedReceiver<PoolItem>,
-    db: Arc<DBConnection>
+    db: Arc<DBConnection>,
 }
 
 pub struct PoolItem {
@@ -34,7 +34,7 @@ impl PoolItem {
             received_at: Local::now(),
             instant_sent: false,
             delay_sent: false,
-            data: data.freeze()
+            data: data.freeze(),
         }
     }
 }
@@ -44,7 +44,7 @@ impl Pool {
         Self {
             pool: VecDeque::new(),
             receiver,
-            db
+            db,
         }
     }
 
@@ -65,13 +65,17 @@ impl Pool {
                     pool.push_back(val);
                 }
 
-                let db_entries = pool.iter_mut().map(|item| {
-                    Pool::process_pool_item(item, Arc::clone(&webhook_db))
-                }).collect::<Vec<_>>();
+                let db_entries = pool
+                    .iter_mut()
+                    .map(|item| Pool::process_pool_item(item, Arc::clone(&webhook_db)))
+                    .collect::<Vec<_>>();
 
                 futures_util::future::join_all(db_entries).await;
 
-                pool = pool.into_par_iter().filter(|item| !item.delay_sent).collect();
+                pool = pool
+                    .into_par_iter()
+                    .filter(|item| !item.delay_sent)
+                    .collect();
                 sleep_until(Instant::now() + Duration::from_secs(2)).await
             }
         })
@@ -92,9 +96,16 @@ impl Pool {
 
         if !item.instant_sent {
             let data = String::from_utf8_lossy(&item.data).to_string();
-            let mut instant_hooks = db_item.instant_webhooks
+            let mut instant_hooks = db_item
+                .instant_webhooks
                 .par_iter()
-                .map(|wh| client.post(wh).header("Content-Type", "application/json").body(data.clone()).send())
+                .map(|wh| {
+                    client
+                        .post(wh)
+                        .header("Content-Type", "application/json")
+                        .body(data.clone())
+                        .send()
+                })
                 .collect::<Vec<_>>();
 
             item.instant_sent = true;
@@ -104,9 +115,16 @@ impl Pool {
         // if our sent time is smaller than (now - delay_seconds) then it has passed the delay and we can send.
         if item.received_at.lt(&delayed_time) && !item.delay_sent {
             let data = String::from_utf8_lossy(&item.data).to_string();
-            let mut delay_hooks = db_item.delay_webhooks
+            let mut delay_hooks = db_item
+                .delay_webhooks
                 .par_iter()
-                .map(|wh| client.post(wh).header("Content-Type", "application/json").body(data.clone()).send())
+                .map(|wh| {
+                    client
+                        .post(wh)
+                        .header("Content-Type", "application/json")
+                        .body(data.clone())
+                        .send()
+                })
                 .collect::<Vec<_>>();
 
             item.delay_sent = true;
@@ -116,21 +134,22 @@ impl Pool {
         futures_util::future::join_all(requests)
             .await
             .into_par_iter()
-            .filter_map(|res| {
-                match res {
-                    Ok(resp) => {
-                        if resp.status().is_server_error() || resp.status().is_client_error() {
-                            Some(format_err!("Status: {}, URL: {}", resp.status(), resp.url()))
-                        } else {
-                            None
-                        }
-                    },
-                    Err(e) => Some(e.into())
+            .filter_map(|res| match res {
+                Ok(resp) => {
+                    if resp.status().is_server_error() || resp.status().is_client_error() {
+                        Some(format_err!(
+                            "Status: {}, URL: {}",
+                            resp.status(),
+                            resp.url()
+                        ))
+                    } else {
+                        None
+                    }
                 }
+                Err(e) => Some(e.into()),
             })
             .for_each(|err| error!("{}", err));
 
         Ok(())
     }
 }
-

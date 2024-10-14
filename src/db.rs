@@ -1,33 +1,34 @@
-use std::sync::Arc;
 use log::info;
 use serde::Serialize;
-use sqlx::{Error, Executor, PgPool, Row};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::types::Uuid;
+use sqlx::{Error, Executor, PgPool, Row};
+use std::sync::Arc;
 
 type PSQLResult = Result<(), Error>;
 
 pub struct DBConnection {
-    db: PgPool
+    db: PgPool,
 }
 impl DBConnection {
     pub async fn new(connection_uri: &str) -> Self {
         let db = PgPoolOptions::new()
             // .max_connections(100)
-            .connect(connection_uri).await.unwrap();
+            .connect(connection_uri)
+            .await
+            .unwrap();
 
-        Self {
-            db
-        }
+        Self { db }
     }
 }
 
-pub struct WebhookDB{
-    db: Arc<DBConnection>
+pub struct WebhookDB {
+    db: Arc<DBConnection>,
 }
 #[derive(sqlx::FromRow, Serialize, Debug)]
 pub struct WebhookDBItem {
     pub id: String,
+    pub name: String,
     pub delay_seconds: i64,
     pub delay_webhooks: Vec<String>,
     pub instant_webhooks: Vec<String>,
@@ -35,9 +36,7 @@ pub struct WebhookDBItem {
 
 impl WebhookDB {
     pub fn new(db: Arc<DBConnection>) -> Self {
-        Self {
-            db
-        }
+        Self { db }
     }
 
     pub async fn initialise(&self) -> anyhow::Result<()> {
@@ -59,21 +58,43 @@ impl WebhookDB {
         Ok(item)
     }
 
-    pub async fn create(&self, delay_seconds: i64, delayed_webhooks: Vec<String>, instant_webhooks: Vec<String>) -> Result<String, Error> {
+    pub async fn create(
+        &self,
+        delay_seconds: i64,
+        name: &str,
+        delayed_webhooks: &[String],
+        instant_webhooks: &[String],
+    ) -> Result<String, Error> {
         let item = sqlx::query(
-            "INSERT INTO webhooks(delay_seconds, delay_webhooks, instant_webhooks) VALUES ($1, $2, $3) RETURNING id"
+            "INSERT INTO webhooks(delay_seconds, name, delay_webhooks, instant_webhooks) VALUES ($1, $2, $3, $4) RETURNING id"
         )
             .bind(delay_seconds)
+            .bind(name)
             .bind(delayed_webhooks)
             .bind(instant_webhooks)
             .fetch_one(&self.db.db)
             .await?;
 
-
         let item: String = item.get(0);
-        info!("{:?}", item);
 
         Ok(item)
+    }
+
+    pub async fn fetch_all(&self) -> anyhow::Result<Vec<WebhookDBItem>> {
+        let results = sqlx::query_as("SELECT * FROM webhooks")
+            .fetch_all(&self.db.db)
+            .await?;
+        Ok(results)
+    }
+
+    pub async fn update_name(&self, id: &str, name: &str) -> PSQLResult {
+        sqlx::query("UPDATE webhooks SET name = $1 WHERE id = $2")
+            .bind(name)
+            .bind(id)
+            .execute(&self.db.db)
+            .await?;
+
+        Ok(())
     }
 
     pub async fn update_delay_seconds(&self, id: String, delay_seconds: i64) -> PSQLResult {
@@ -87,20 +108,24 @@ impl WebhookDB {
     }
 
     pub async fn add_delayed_webhook(&self, id: String, delay_webhook: String) -> PSQLResult {
-        sqlx::query("UPDATE webhooks SET delay_webhooks = array_append(delay_webhooks, $1) WHERE id = $2")
-            .bind(delay_webhook)
-            .bind(id)
-            .execute(&self.db.db)
-            .await?;
+        sqlx::query(
+            "UPDATE webhooks SET delay_webhooks = array_append(delay_webhooks, $1) WHERE id = $2",
+        )
+        .bind(delay_webhook)
+        .bind(id)
+        .execute(&self.db.db)
+        .await?;
         Ok(())
     }
 
     pub async fn remove_delayed_webhook(&self, id: String, delay_webhook: String) -> PSQLResult {
-        sqlx::query("UPDATE webhooks SET delay_webhooks = array_remove(delay_webhooks, $1) WHERE id = $2")
-            .bind(delay_webhook)
-            .bind(id)
-            .execute(&self.db.db)
-            .await?;
+        sqlx::query(
+            "UPDATE webhooks SET delay_webhooks = array_remove(delay_webhooks, $1) WHERE id = $2",
+        )
+        .bind(delay_webhook)
+        .bind(id)
+        .execute(&self.db.db)
+        .await?;
         Ok(())
     }
 
