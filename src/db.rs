@@ -1,7 +1,5 @@
-use log::info;
 use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
-use sqlx::types::Uuid;
 use sqlx::{Error, Executor, PgPool, Row};
 use std::sync::Arc;
 

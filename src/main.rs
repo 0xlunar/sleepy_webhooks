@@ -4,7 +4,10 @@ mod routes;
 
 use crate::db::{DBConnection, WebhookDB};
 use crate::pool::PoolItem;
-use crate::routes::{create_delayed_webhook, delete_delayed_webhook, get_webhook_details, get_webhooks, send_delayed_webhook, update_delayed_webhook_settings};
+use crate::routes::{
+    create_delayed_webhook, delete_delayed_webhook, get_webhook_details, get_webhooks,
+    send_delayed_webhook, update_delayed_webhook_settings,
+};
 use actix_web::{web, App, HttpServer};
 use clap::Parser;
 use serde::Deserialize;
