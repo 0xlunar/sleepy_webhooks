@@ -36,3 +36,11 @@ Options:
     - `name: String`
     - `delayed_webhooks: Vec<String>`
     - `instant_webhooks: Vec<String>` Defaults to empty vec
+
+### Docker
+```commandline
+docker compose up
+```
+Docker will launch a Postgresql Database and should be inaccessible to everything except sleepy_webhooks.
+The port defaults to `8080` and can be changed inside the `DockerFile` and `compose.yaml`, ensure you also 
+set the `--port` flag in the DockerFile for running the server.
