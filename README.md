@@ -24,7 +24,7 @@ Options:
 - `PATCH /webhook/{id}` Update Delayed Webhooks config
   - JSON Payload (All fields are optional)
     - `delay: Option<i64>`
-    - `name: String`
+    - `name: Option<String>`
     - `remove_delayed: Option<Vec<String>>`
     - `append_delayed: Option<Vec<String>>`
     - `remove_instant: Option<Vec<String>>`
